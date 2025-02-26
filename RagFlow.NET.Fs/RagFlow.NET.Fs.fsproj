@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net9.0;net8.0;net6.0</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+	  <Content Include="ApiJson\CreateSession.json" />
+	  <Content Include="ApiJson\CreateDb.json" />
+	  <Content Include="ApiJson\ListChatAssistants.json" />
+    <Compile Include="Library.fs" />
+  </ItemGroup>
+
+  <ItemGroup />
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Data" Version="6.4.1" />
+  </ItemGroup>
+
+</Project>

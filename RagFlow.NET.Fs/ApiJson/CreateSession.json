@@ -1,0 +1,22 @@
+{
+    "code": 0,
+    "data": {
+        "chat_id": "2ca4b22e878011ef88fe0242ac120005",
+        "create_date": "Fri, 11 Oct 2024 08:46:14 GMT",
+        "create_time": 1728636374571,
+        "id": "4606b4ec87ad11efbc4f0242ac120006",
+        "messages": [
+            {
+                "content": "Hi! I am your assistant，can I help you?",
+                "role": "assistant"
+            }
+        ],
+        "name": "new session",
+        "update_date": "Fri, 11 Oct 2024 08:46:14 GMT",
+        "update_time": 1728636374571
+    }
+}
+{
+    "code": 102,
+    "message": "Name cannot be empty."
+}
