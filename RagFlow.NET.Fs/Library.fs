@@ -2,9 +2,13 @@
 open FSharp.Data
 open System
 open System.Text.Json
-type CreateDbResponse = JsonProvider<Sample="ApiJson/CreateDb.json", SampleIsList=true>
-type ListChatAssistantsResponse = JsonProvider<Sample="ApiJson/ListChatAssistants.json", SampleIsList=true>
-type CreateSessionResponse = JsonProvider<Sample="ApiJson/CreateSession.json", SampleIsList=true>
+open System.Text.Json.Serialization
+open System.IO
+open System.Text
+type CreateDbResponse = JsonProvider<Sample="./ApiJson/CreateDb.json", SampleIsList=true>
+type ListChatAssistantsResponse = JsonProvider<Sample="./ApiJson/ListChatAssistants.json", SampleIsList=true>
+type CreateSessionResponse = JsonProvider<Sample="./ApiJson/CreateSession.json", SampleIsList=true>
+type ConverseWithChatAssistantResponse = JsonProvider<Sample="./ApiJson/ConverseWithChatAssistant.json", SampleIsList=true>
 
 
 module Urls = 
@@ -28,12 +32,39 @@ type ChatSession = {
     SessionId: string option
 }
 
+module Requests = 
+    type ListChatAssistants = {
+        Page: int
+        PageSize: int
+        OrderBy: string
+        Desc: bool
+        Name: string
+        Id: string
+    }
+    with static member Defalut = { Page = 1; PageSize = 30; OrderBy = "create_time"; Desc = true; Name = ""; Id = "" }
 
 module RagFlowClient =
 
-    let createClient (key: string) (baseUrl: string) = { Key = key; BaseUrl = baseUrl }
+    
+    
 
-    let listChatAssistants (page: int) (pageSize: int) (orderBy: string) (desc: bool) (name: string) (id: string) (session: Client) =
+    /// <summary>
+    /// 创建一个ragflow客户端
+    /// </summary>
+    /// <param name="key"></param>
+    /// <param name="baseUrl"></param>
+    let createClient (key: string) (baseUrl: string) = { Key = key; BaseUrl = baseUrl }
+    /// <summary>
+    /// 列出所有的chat assistant
+    /// </summary>
+    /// <param name="page"></param>
+    /// <param name="pageSize"></param>
+    /// <param name="orderBy"></param>
+    /// <param name="desc"></param>
+    /// <param name="name"></param>
+    /// <param name="id"></param>
+    /// <param name="session"></param>
+    let listChatAssistants (page: int) (pageSize: int) (orderBy: string) (desc: bool)  (id: string) (name: string) (session: Client) =
         let route = $"{session.BaseUrl}{Urls.listChatAssistants}"
         let url = String.Format (route, page, pageSize, orderBy, desc, name, id)
 
@@ -47,11 +78,12 @@ module RagFlowClient =
             else Error (res.Message |> Option.defaultValue "Error")
         with ex -> Error ex.Message
 
-    let listChatAssistantsByName (name: string) (session: Client) =
-        listChatAssistants 1 30 "create_time" true name "" session
+
+    // 
+    let listChatAssistantsByName = listChatAssistants 1 30 "create_time" true ""
 
 
-    let createChatSession  (name: string) (chatId: string) (session: Client)=
+    let createChatSession (name: string) (chatId: string) (session: Client)=
         let route = $"{session.BaseUrl}{Urls.createSession}"
         let url = String.Format (route, chatId)
         let body = $"{{\"name\": \"{name}\" }}"
@@ -62,24 +94,59 @@ module RagFlowClient =
                     Http.RequestString
                         (url, headers = [ "Authorization", "Bearer " + session.Key ; HttpRequestHeaders.ContentType "application/json"], body = TextRequest(body), httpMethod = "Post") 
                     |> CreateSessionResponse.Parse
-            if res.Code = 0 then Ok { Key = session.Key; ChatId = chatId; SessionId = Some (res.Data.Value.ChatId.ToString("N")); BaseUrl = session.BaseUrl }
+            if res.Code = 0 then Ok { Key = session.Key; ChatId = chatId; SessionId = Some (res.Data.Value.Id.ToString("N")); BaseUrl = session.BaseUrl }
             else Error (res.Message |> Option.defaultValue "Error")
         with ex -> Error ex.Message
 
-    let createDefaultChatSession  (chatId: string) (session: Client)  = { Key = session.Key; ChatId = chatId; SessionId = None; BaseUrl = session.BaseUrl}
+    let createDefaultChatSession  (chatId: string) (session: Client)
+        = { Key = session.Key; ChatId = chatId; SessionId = None; BaseUrl = session.BaseUrl}
 
 
-    let converseWithChatAssistant (message: string) (session: ChatSession) =
+    let converseWithChatAssistant (message: string) (stream: bool) (session: ChatSession) =
         let route = $"{session.BaseUrl}{Urls.ConverseWithChatAssistant}"
         let url = String.Format (route, session.ChatId)
-        let body = {| question = message; stream = false; session = session.SessionId |} |> JsonSerializer.Serialize
+        let options = JsonSerializerOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull) 
+        let body = JsonSerializer.Serialize ({| question = message; stream = stream; session_id = session.SessionId |}, options)
         try 
+            if stream then
+                let res = Http.RequestStream
+                            (url, 
+                            headers = [ "Authorization", "Bearer " + session.Key; HttpRequestHeaders.ContentType "application/json" ],
+                            body = TextRequest body,
+                            httpMethod = "Post")
+                let mutable buffer = Array.zeroCreate 4096
+
+                Ok (seq {
+                    let getData() =
+                        let revCnt = res.ResponseStream.Read (buffer, 0, 4096)
+                        let resStr = Encoding.UTF8.GetString(buffer, 0, revCnt)
+                        resStr.Split("data:")
+                            |> Array.filter (fun x -> not (String.IsNullOrWhiteSpace x))
+                            |> Array.map ConverseWithChatAssistantResponse.Parse
+                    let rec loop() = seq {
+                        let res = getData()
+                        if res.Length > 0 then
+                            yield! res
+                            yield! loop()
+                    }
+
+                    yield! loop()
+                        
+                })
+                
+            else
             let res = Http.RequestString
                                 (url, 
                                 headers = [ "Authorization", "Bearer " + session.Key; HttpRequestHeaders.ContentType "application/json" ], 
                                 body = TextRequest body, httpMethod = "Post")
                       
-            Ok (res.Split("data:")) // 分隔一下
+            Ok (
+            res.Trim().Split("data:")
+            |> Array.filter (fun x -> not (String.IsNullOrWhiteSpace x))
+            |> Array.map ConverseWithChatAssistantResponse.Parse
+            |> Array.toSeq
+            ) 
+            // 分隔一下
         with ex -> Error ex.Message
 
 

@@ -1,0 +1,60 @@
+{
+  "code": 0,
+  "data": {
+    "answer": "I am an intelligent assistant designed to help answer questions by summarizing content from a",
+    "reference": {},
+    "audio_binary": null,
+    "id": "a84c5dd4-97b4-4624-8c3b-974012c8000d",
+    "session_id": "82b0ab2a9c1911ef9d870242ac120006"
+  }
+}
+{
+  "code": 0,
+  "message": "",
+  "data": {
+    "answer": "Hi! I'm your assistant, what can I do for you?",
+    "reference": {},
+    "audio_binary": null,
+    "id": null,
+    "session_id": "b01eed84b85611efa0e90242ac120005"
+  }
+}
+{
+    "code": 0,
+    "data": {
+        "answer": "I am an intelligent assistant designed to help answer questions by summarizing content from a knowledge base ##0$$. My responses are based on the information available in the knowledge base and any relevant chat history.",
+        "reference": {
+            "total": 1,
+            "chunks": [
+                {
+                    "id": "faf26c791128f2d5e821f822671063bd",
+                    "content": "xxxxxxxx",
+                    "document_id": "dd58f58e888511ef89c90242ac120006",
+                    "document_name": "1.txt",
+                    "dataset_id": "8e83e57a884611ef9d760242ac120006",
+                    "image_id": "",
+                    "similarity": 0.7,
+                    "vector_similarity": 0.0,
+                    "term_similarity": 1.0,
+                    "positions": [
+                        ""
+                    ]
+                }
+            ],
+            "doc_aggs": [
+                {
+                    "doc_name": "1.txt",
+                    "doc_id": "dd58f58e888511ef89c90242ac120006",
+                    "count": 1
+                }
+            ]
+        },
+        "prompt": "xxxxxxxxxxx",
+        "id": "a84c5dd4-97b4-4624-8c3b-974012c8000d",
+        "session_id": "82b0ab2a9c1911ef9d870242ac120006"
+    }
+}
+{
+    "code": 0,
+    "data": true
+}

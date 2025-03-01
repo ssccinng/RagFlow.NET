@@ -6,9 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-	  <Content Include="ApiJson\CreateSession.json" />
-	  <Content Include="ApiJson\CreateDb.json" />
-	  <Content Include="ApiJson\ListChatAssistants.json" />
+
+    <Content Include="ApiJson\ConverseWithChatAssistant.json" />
+
+    <Content Include="ApiJson\CreateDb.json" />
+
+    <Content Include="ApiJson\CreateSession.json" />
+
+    <Content Include="ApiJson\ListChatAssistants.json" />
+
     <Compile Include="Library.fs" />
   </ItemGroup>
 
