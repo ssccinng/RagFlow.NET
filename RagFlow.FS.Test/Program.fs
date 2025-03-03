@@ -1,5 +1,6 @@
 ﻿// For more information see https://aka.ms/fsharp-console-apps
 open RagFlow.NET.Fs
+open RagFlow.NET.Fs
 //let a = 1
 let session = RagFlowClient.createClient "ragflow-M1ZjdjMjQ4ZjNlODExZWY4ZmJkMDI0Mm" "http://172.31.192.1"
 
