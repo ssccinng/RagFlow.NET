@@ -1,36 +1,33 @@
 ﻿
 using static RagFlow.NET.Fs.RagFlowClient;
 
-namespace RagFlow.Test
+var client = createClient("ragflow-M1ZjdjMjQ4ZjNlODExZWY4ZmJkMDI0Mm", "http://localhost");
+var assistantss = listChatAssistants("dlmaster", client);
+if (assistantss.IsOk)
 {
-    internal class Program
+    var assistants = assistantss.ResultValue;
+    foreach (var ass in assistants)
     {
-        static void Main(string[] args)
+        System.Console.WriteLine(ass.Name);
+    }
+    var assistant = assistants[0];
+
+    var chats = listChatAssistantSessions(assistant);
+
+    foreach (var ch in chats.ResultValue)
+    {
+        Console.WriteLine(ch?.Name);
+        updateChatSession(ch?.Name + 1, ch);
+    }
+
+    var chatSession = createChatSession("testLib", assistant);
+    var res = converseWithChatAssistant("强化学习是什么", false, chatSession.ResultValue);
+    if (res.IsOk)
+    {
+        foreach (var chat in res.ResultValue)
         {
-            var client = createClient("ragflow-M1ZjdjMjQ4ZjNlODExZWY4ZmJkMDI0Mm", "http://localhost");
-            var aa = listChatAssistantsByName.Invoke("dlmaster").Invoke(client);
-            if (aa.IsOk)
-            {
-                var assistants = aa.ResultValue;
-                foreach (var ass in assistants)
-                {
-                    System.Console.WriteLine(ass.Name);
-                }
-                var assistant = assistants[0];
-
-                var chatSession = createChatSession("testLib", assistant, client);
-                var res = converseWithChatAssistant("强化学习是什么", false, chatSession.ResultValue);
-                if (res.IsOk)
-                {
-                    foreach (var chat in res.ResultValue)
-                    {
-                        Console.WriteLine(chat.Answer);
-                        
-                    }
-                }
-
-            }
-
+            Console.WriteLine(chat.Answer);
         }
     }
+
 }

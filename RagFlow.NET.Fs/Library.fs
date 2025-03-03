@@ -8,6 +8,7 @@ open System.Text
 type CreateDbResponse = JsonProvider<Sample="./ApiJson/CreateDb.json", SampleIsList=true>
 type ListChatAssistantsResponse = JsonProvider<Sample="./ApiJson/ListChatAssistants.json", SampleIsList=true>
 type CreateSessionResponse = JsonProvider<Sample="./ApiJson/CreateSession.json", SampleIsList=true>
+type ListChatAssistantSessionResponse = JsonProvider<Sample="./ApiJson/ListChatAssistantSession.json", SampleIsList=true>
 type ConverseWithChatAssistantResponse = JsonProvider<Sample="./ApiJson/ConverseWithChatAssistant.json", SampleIsList=true>
 type DeleteSessionResponse = JsonProvider<Sample="./ApiJson/DeleteSession.json", SampleIsList=true>
 type UpdateSessionResponse = JsonProvider<Sample="./ApiJson/UpdateSession.json", SampleIsList=true>
@@ -23,13 +24,13 @@ module Urls =
     /// </summary>
     let createSession = "/api/v1/chats/{0}/sessions"
     [<Literal>]
-    let updateSession = "/api/v1/chats/%s/sessions/%s"
+    let updateSession = "%s/api/v1/chats/%s/sessions/%s"
     [<Literal>]
     let deleteSession = "/api/v1/chats/%s/sessions"
     //let listA = "/api/v1/chats/{chat_id}/sessions"
     let ConverseWithChatAssistant = "/api/v1/chats/{0}/completions"
     [<Literal>]
-    let listChatAssistantSessions = "/api/v1/chats/%s/sessions"
+    let listChatAssistantSessions = "%s/api/v1/chats/%s/sessions"
 
 
 
@@ -40,20 +41,22 @@ type Client = {
     BaseUrl: string
 }
 
-type ChatSession = {
-    Key: string
-    ChatId: string
-    BaseUrl: string
-    SessionId: string option
-    Name: string
-    // 加个名字?
-}
+
 
 type ChatAssistant = {
+    Client: Client
     Id: string
     Name: string
     CreateTime: DateTime
     UpdateTime: DateTime
+}
+
+
+type ChatSession = {
+    ChatAssistant: ChatAssistant
+    SessionId: string
+    Name: string
+    // 加个名字?
 }
 
 // type AnswerReference = {
@@ -77,10 +80,20 @@ module Requests =
         OrderBy: string
         Desc: bool
         Name: string
-        Id: string
+        DatasetId: string
     }
-    with static member Defalut = { Page = 1; PageSize = 30; OrderBy = "create_time"; Desc = true; Name = ""; Id = "" }
+    
+    with static member Defalut = { Page = 1; PageSize = 30; OrderBy = "create_time"; Desc = true; Name = ""; DatasetId = "" }
 
+    type ListChatAssistantSession = {
+        Page: int
+        PageSize: int
+        OrderBy: string
+        Desc: bool
+        Name: string
+        SessionId: string
+    }
+    with static member Defalut = { Page = 1; PageSize = 30; OrderBy = "create_time"; Desc = true; Name = ""; SessionId = "" }
 
 
 
@@ -101,17 +114,22 @@ module RagFlowClient =
     /// <param name="name"></param>
     /// <param name="id"></param>
     /// <param name="session"></param>
-    let listChatAssistants (page: int) (pageSize: int) (orderBy: string) (desc: bool)  (id: string) (name: string) (session: Client) =
-        let route = $"{session.BaseUrl}{Urls.listChatAssistants}"
-        let url = String.Format (route, page, pageSize, orderBy, desc, name, id)
+    let listChatAssistantsAdv (data: Requests.ListChatAssistants) (client: Client) =
+        let url = $"{client.BaseUrl}{Urls.listChatAssistants}"
+        // let url = String.Format (route, data.Page, data.PageSize, data.OrderBy, data.Desc, data.Name, data.Id)
 
-        let query = [ "page", page.ToString(); "page_size", pageSize.ToString(); "orderby", orderBy; "desc", desc.ToString(); "name", name; "id", id ] 
+        let query = [ "page", data.Page.ToString(); "page_size", data.PageSize.ToString(); "orderby", data.OrderBy; "desc", data.Desc.ToString(); "name", data.Name; "id", data.DatasetId ] 
                     |> List.filter (fun (k, v) -> not( String.IsNullOrWhiteSpace v) )
                     //|> List.map (fun (k, v) -> $"{k}={v}")
                     //|> String.concat "&"
         try 
-            let res = Http.RequestString(url, headers = [ "Authorization", "Bearer " + session.Key ], query = query , httpMethod = "Get") |> ListChatAssistantsResponse.Parse
-            if res.Code = 0 then Ok (res.Data |> Array.map (fun x -> { Id = x.Id.ToString("N"); Name = x.Name; CreateTime = DateTimeOffset.FromUnixTimeMilliseconds(x.CreateTime).DateTime; UpdateTime = DateTimeOffset.FromUnixTimeMilliseconds(x.UpdateTime).DateTime }))
+            let res = Http.RequestString(url, headers = [ "Authorization", "Bearer " + client.Key ], query = query , httpMethod = "Get") |> ListChatAssistantsResponse.Parse
+            if res.Code = 0 then Ok (res.Data |> Array.map (fun x -> 
+                    { Client = client ; 
+                    Id = x.Id.ToString "N"; 
+                    Name = x.Name; 
+                    CreateTime = DateTimeOffset.FromUnixTimeMilliseconds(x.CreateTime).DateTime; 
+                    UpdateTime = DateTimeOffset.FromUnixTimeMilliseconds(x.UpdateTime).DateTime }))
             else Error (res.Message |> Option.defaultValue "Error")
         with ex -> Error ex.Message
 
@@ -119,53 +137,69 @@ module RagFlowClient =
     /// <summary>
     /// 列出所有的chat assistant
     /// </summary>
-    let listChatAssistantsByName = listChatAssistants 1 30 "create_time" true ""
-
+    let listChatAssistants name client = listChatAssistantsAdv { Requests.ListChatAssistants.Defalut with Name = name } client
 
     /// <summary>
     /// 创建一个chat session
     /// </summary>
-    let createChatSession (name: string) (chatai: ChatAssistant) (session: Client)=
-        let route = $"{session.BaseUrl}{Urls.createSession}"
-        let url = String.Format (route, chatai.Id)
+    let createChatSession (name: string) (assistant: ChatAssistant) =
+        let route = $"{assistant.Client.BaseUrl}{Urls.createSession}"
+        let url = String.Format (route, assistant.Id)
         let body = $"{{\"name\": \"{name}\" }}"
         
         try 
         
             let res = 
                     Http.RequestString
-                        (url, headers = [ "Authorization", "Bearer " + session.Key ; HttpRequestHeaders.ContentType "application/json"], body = TextRequest(body), httpMethod = "Post") 
+                        (url, headers = [ "Authorization", "Bearer " + assistant.Client.Key ; HttpRequestHeaders.ContentType "application/json"], body = TextRequest body, httpMethod = "Post") 
                     |> CreateSessionResponse.Parse
-            if res.Code = 0 then Ok { Key = session.Key; 
-                                        ChatId = chatai.Id; 
-                                        SessionId = Some (res.Data.Value.Id.ToString("N")); 
-                                        BaseUrl = session.BaseUrl; Name = name }
+            if res.Code = 0 then Ok {  ChatAssistant = assistant;
+                                        SessionId = res.Data.Value.Id.ToString "N"; 
+                                         Name = name }
             else Error (res.Message |> Option.defaultValue "Error")
         with ex -> Error ex.Message
 
     /// <summary>
     /// 创建一个默认的chat session
     /// </summary>
-    let createDefaultChatSession  (chatId: string) (session: Client)
-        = { Key = session.Key; ChatId = chatId; SessionId = None; BaseUrl = session.BaseUrl; Name = "" }
+    //let createDefaultChatSession (assistant: ChatAssistant)
+    //    = { ChatAssistant = assistant; SessionId = None; Name = "" }
 
-    let listChatAssistantSessions (chatId: string) (session: ChatSession) =
-        let route = $"{session.BaseUrl}{Urls.listChatAssistantSessions}"
-        let url = String.Format (route, chatId)
+
+    /// <summary>
+    /// 列出所有的chat session
+    /// </summary>
+    let listChatAssistantSessionsAdv (data: Requests.ListChatAssistantSession) (assistant: ChatAssistant) =
+        let url = sprintf Urls.listChatAssistantSessions assistant.Client.BaseUrl assistant.Id
+        let query = [ "page", data.Page.ToString(); 
+                "page_size", data.PageSize.ToString(); 
+                "orderby", data.OrderBy; 
+                "desc", data.Desc.ToString(); 
+                "name", data.Name; 
+                "id", data.SessionId ] 
+                    |> List.filter (fun (k, v) -> not( String.IsNullOrWhiteSpace v) )
         try 
-            let res = Http.RequestString(url, headers = [ "Authorization", "Bearer " + session.Key ], httpMethod = "Get") |> CreateSessionResponse.Parse
-            if res.Code = 0 then Ok res
+            let res = Http.RequestString(url, 
+                        headers = [ "Authorization", "Bearer " + assistant.Client.Key ], 
+                        query = query,
+                        httpMethod = "Get") 
+                        |> ListChatAssistantSessionResponse.Parse
+            if res.Code = 0 
+            then 
+                Ok (res.Data |> Array.map (fun x -> { ChatAssistant = assistant; SessionId = x.Id.ToString "N"; Name = x.Name }))
             else Error (res.Message |> Option.defaultValue "Error")
         with ex -> Error ex.Message
 
+    let listChatAssistantSessions assistant = listChatAssistantSessionsAdv Requests.ListChatAssistantSession.Defalut assistant
+        
 
     let updateChatSession name (session: ChatSession) =
-        let url = sprintf Urls.updateSession session.ChatId session.SessionId.Value
+        let url = sprintf Urls.updateSession session.ChatAssistant.Client.BaseUrl session.ChatAssistant.Id session.SessionId
         let body = $"{{\"name\": \"{name}\" }}"
         try 
             let res = 
                     Http.RequestString
-                        (url, headers = [ "Authorization", "Bearer " + session.Key ; HttpRequestHeaders.ContentType "application/json"], body = TextRequest body, httpMethod = "Put") 
+                        (url, headers = [ "Authorization", "Bearer " + session.ChatAssistant.Client.Key ; HttpRequestHeaders.ContentType "application/json"], body = TextRequest body, httpMethod = "Put") 
                     |> UpdateSessionResponse.Parse
             if res.Code = 0 then Ok { session with Name = name }
             else Error (res.Message |> Option.defaultValue "Error")
@@ -175,12 +209,12 @@ module RagFlowClient =
         if Array.isEmpty sessions then Ok ()
         else
             let session = sessions.[0]
-            let url = sprintf Urls.deleteSession session.ChatId
+            let url = sprintf Urls.deleteSession session.SessionId
             try 
-                let body = JsonSerializer.Serialize {|ids = sessions |> Array.map (fun x -> x.SessionId.Value) |}
+                let body = JsonSerializer.Serialize {|ids = sessions |> Array.map (fun x -> x.SessionId) |}
                 let res = 
                         Http.RequestString
-                            (url, headers = [ "Authorization", "Bearer " + session.Key ; HttpRequestHeaders.ContentType "application/json"], body = TextRequest body, httpMethod = "Delete")
+                            (url, headers = [ "Authorization", "Bearer " + session.ChatAssistant.Client.Key ; HttpRequestHeaders.ContentType "application/json"], body = TextRequest body, httpMethod = "Delete")
                         |> DeleteSessionResponse.Parse
                 if res.Code = 0 then Ok ()
                 else Error (res.Message |> Option.defaultValue "Error")
@@ -189,15 +223,15 @@ module RagFlowClient =
 
 
     let converseWithChatAssistant (message: string) (stream: bool) (session: ChatSession) =
-        let route = $"{session.BaseUrl}{Urls.ConverseWithChatAssistant}"
-        let url = String.Format (route, session.ChatId)
+        let route = $"{session.ChatAssistant.Client.BaseUrl}{Urls.ConverseWithChatAssistant}"
+        let url = String.Format (route, session.ChatAssistant.Id)
         let options = JsonSerializerOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull) 
         let body = JsonSerializer.Serialize ({| question = message; stream = stream; session_id = session.SessionId |}, options)
         try 
             if stream then
                 let res = Http.RequestStream
                             (url, 
-                            headers = [ "Authorization", "Bearer " + session.Key; HttpRequestHeaders.ContentType "application/json" ],
+                            headers = [ "Authorization", "Bearer " + session.ChatAssistant.Client.Key; HttpRequestHeaders.ContentType "application/json" ],
                             body = TextRequest body,
                             httpMethod = "Post")
                 let mutable buffer = Array.zeroCreate 4096
@@ -237,7 +271,7 @@ module RagFlowClient =
             else
             let res = Http.RequestString
                                 (url, 
-                                headers = [ "Authorization", "Bearer " + session.Key; HttpRequestHeaders.ContentType "application/json" ], 
+                                headers = [ "Authorization", "Bearer " + session.ChatAssistant.Client.Key; HttpRequestHeaders.ContentType "application/json" ], 
                                 body = TextRequest body, httpMethod = "Post")
                       
             Ok (
